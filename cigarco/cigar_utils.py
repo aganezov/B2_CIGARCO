@@ -1,6 +1,14 @@
+import re
+from typing import Tuple, List
+
 ALLOWED_OPERATIONS = {'M', "I", "D", "N", "S", "H", "P", "=", "X"}
 QUERY_CONSUMING_OPERATIONS = ALLOWED_OPERATIONS - {"D", "N", "H", "P"}
 TARGET_CONSUMING_OPERATIONS = ALLOWED_OPERATIONS - {"I", "S", "H", "P"}
+
+# A regex designed to capture in a named way pairs of number encoded counts for operations, as well as the operations themselves
+#   meant to be used in a `re.finditer` fashion
+# This regex is going to be reused constantly, so its better to compute it once on the module load
+CIGAR_REGEX = re.compile(r'((?P<count>\d+)(?P<operation>[MIDNSHP=X]))')
 
 
 def is_valid_cigar(cigar: str) -> bool:
@@ -34,3 +42,27 @@ def is_valid_cigar(cigar: str) -> bool:
         return False
 
     return True
+
+
+def parse_cigar(cigar: str) -> List[Tuple[int, str]]:
+    """
+    Parses a given CIGAR encoded string into a list of tuples (count, operation)
+    No internal checks for the validity of the input CIGAR string are made
+
+    Args:
+        cigar (str): CIGAR encoded string
+
+    Returns:
+        a list of tuples CIGAR operations (str) and their counts (List[Tuple[int, str]])
+
+    Examples:
+        >>> parse_cigar("10M11D")
+        [(10, "M"), (11, "D")]
+
+        >>> parse_cigar("1M115I10M")
+        [(1, "M"), (115 "I"), (10, "M")]
+    """
+    result: List[Tuple[int, str]] = []
+    for entry in re.finditer(CIGAR_REGEX, cigar):
+        result.append((int(entry.groupdict()["count"]), entry.groupdict()["operation"]))
+    return result
