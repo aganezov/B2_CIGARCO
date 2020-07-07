@@ -14,6 +14,7 @@ CIGAR_REGEX = re.compile(r'((?P<count>\d+)(?P<operation>[MIDNSHP=X]))')
 def is_valid_cigar(cigar: str) -> bool:
     """
     A CIGAR string is valid if it is non-empty string with alternating numbers and supporting single character operations
+    Works in a single pass with O(n) complexity, where n is the size of the input string; requires O(1) extra memory.
 
     Args:
         cigar (str): a CIGAR encoded (doc: https://samtools.github.io/hts-specs/SAMv1.pdf , page 7) alignment string
