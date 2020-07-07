@@ -1,6 +1,6 @@
-ALLOWED_OPERATION = {'M', "I", "D", "N", "S", "H", "P", "=", "X"}
-QUERY_CONSUMING_OPERATIONS = ALLOWED_OPERATION - {"D", "N", "H", "P"}
-TARGET_CONSUMING_OPERATIONS = ALLOWED_OPERATION - {"I", "S", "H", "P"}
+ALLOWED_OPERATIONS = {'M', "I", "D", "N", "S", "H", "P", "=", "X"}
+QUERY_CONSUMING_OPERATIONS = ALLOWED_OPERATIONS - {"D", "N", "H", "P"}
+TARGET_CONSUMING_OPERATIONS = ALLOWED_OPERATIONS - {"I", "S", "H", "P"}
 
 
 def is_valid_cigar(cigar: str) -> bool:
@@ -20,17 +20,17 @@ def is_valid_cigar(cigar: str) -> bool:
     for char in cigar:
 
         # Every entry has to be either a digit or a supporter single-char encoded operation
-        if not (char.isdigit() or char in ALLOWED_OPERATION):
+        if not (char.isdigit() or char in ALLOWED_OPERATIONS):
             return False
 
         # CIGAR string must start with a digit
-        if char in ALLOWED_OPERATION and (not prev or not prev.isdigit()):
+        if char in ALLOWED_OPERATIONS and (not prev or not prev.isdigit()):
             return False
 
         prev = char
 
     # CIGAR string must end with an operation
-    if prev not in ALLOWED_OPERATION:
+    if prev not in ALLOWED_OPERATIONS:
         return False
 
     return True
