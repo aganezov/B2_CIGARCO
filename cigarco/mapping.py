@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from cigarco.cigar_utils import is_valid_cigar
+
 
 @dataclass
 class Alignment(object):
@@ -28,3 +30,5 @@ class Alignment(object):
         """
         if self.start < 0:
             raise ValueError(f"incorrect start coordinate {self.start}. Must be a non-negative integer")
+        if not is_valid_cigar(self.cigar):
+            raise ValueError(f"invalid CIGAR string '{self.cigar}'")
