@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 from cigarco.cigar_utils import is_valid_cigar
 
@@ -54,3 +55,23 @@ class CMapper(object):
         alignment (Alignments): an alignment object for which the coordinate conversion (i.e., mapping) is performed. Alignment object is assumed to be valid
     """
     alignment: Alignment
+    _query_prefix_sums: List[int] = None
+    _target_prefix_sums: List[int] = None
+
+    @property
+    def query_prefix_sums(self) -> List[int]:
+        if self._query_prefix_sums is None:
+            self.compute_query_prefix_sums()
+        return self._query_prefix_sums
+
+    def compute_query_prefix_sums(self):
+        self._query_prefix_sums = [1, 2]    # TODO: remove dummy implementation
+
+    @property
+    def target_prefix_sums(self) -> List[int]:
+        if self._target_prefix_sums is None:
+            self.compute_target_prefix_sums()
+        return self._target_prefix_sums
+
+    def compute_target_prefix_sums(self):
+        self._target_prefix_sums = [1, 2]   # TODO: remove dummy implementation
