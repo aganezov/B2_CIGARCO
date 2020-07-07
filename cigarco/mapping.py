@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
-from cigarco.cigar_utils import is_valid_cigar
+from cigarco.cigar_utils import is_valid_cigar, parse_cigar, TARGET_CONSUMING_OPERATIONS, QUERY_CONSUMING_OPERATIONS
 
 
 @dataclass
@@ -60,18 +60,73 @@ class CMapper(object):
 
     @property
     def query_prefix_sums(self) -> List[int]:
+        """ Implements a descriptor-like protocol for accessing prefix sums arrays for query consuming operations in CIGAR string
+            computation is only invoked if the underlying data-holding attribute is set to None, which can happen either before the first access to the prefix sums array,
+            or if the alignment object has been changed and prefix sums arrays have been invalidated
+
+        Returns:
+            prefix sums (List[int]) for all operations in alignment CIGAR string
+        """
         if self._query_prefix_sums is None:
             self.compute_query_prefix_sums()
         return self._query_prefix_sums
 
     def compute_query_prefix_sums(self):
-        self._query_prefix_sums = [1, 2]    # TODO: remove dummy implementation
+        """
+        Computes prefix sums array for query consuming operations in the alignment object's CIGAR string
+
+        TODO: rewrite with iterators approach
+        """
+        cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar)
+        query_op_cnts = [cnt if op in QUERY_CONSUMING_OPERATIONS else 0 for cnt, op in cigar_operations]
+        self._query_prefix_sums = self.compute_prefix_sums(query_op_cnts)
 
     @property
     def target_prefix_sums(self) -> List[int]:
+        """ Implements a descriptor-like protocol for accessing prefix sums arrays for target consuming operations in CIGAR string
+            computation is only invoked if the underlying data-holding attribute is set to None, which can happen either before the first access to the prefix sums array,
+            or if the alignment object has been changed and prefix sums arrays have been invalidated
+
+        Returns:
+            prefix sums (List[int]) for all operations in alignment CIGAR string
+        """
         if self._target_prefix_sums is None:
             self.compute_target_prefix_sums()
         return self._target_prefix_sums
 
     def compute_target_prefix_sums(self):
-        self._target_prefix_sums = [1, 2]   # TODO: remove dummy implementation
+        """
+        Computes prefix sums array for target consuming operations in the alignment object's CIGAR string
+
+        TODO: rewrite with iterators approach
+        """
+        cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar)
+        target_op_cnts = [cnt if op in TARGET_CONSUMING_OPERATIONS else 0 for cnt, op in cigar_operations]
+        self._target_prefix_sums = self.compute_prefix_sums(target_op_cnts)   # TODO: remove dummy implementation
+
+    @staticmethod
+    def compute_prefix_sums(values: List[int]) -> List[int]:
+        """
+        Stateless (thus staticmethod) utility function that computes prefix sums array for a given integer array.
+        For a given array A a prefix sum array A' is defined as follows:
+            A'[0] = 0
+            for i > 0: A'[i] = sum(A[0] ... A[i-1])
+        Provided implementation works in linear O(n) time, where `n` is the length of the input array
+
+        Args:
+            values (List[int]): a list of integers
+
+        Returns:
+            prefix sums (List[int]): a list a prefix sums for the input list
+
+        Examples:
+            >>> CMapper.compute_prefix_sums([1,2,3])
+            [0,1,3,6]
+
+            >>> CMapper.compute_prefix_sums([])
+            [0]
+        """
+        result = [0]
+        for v in values:
+            result.append(result[-1] + v)
+        return result
