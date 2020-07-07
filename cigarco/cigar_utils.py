@@ -20,6 +20,19 @@ def is_valid_cigar(cigar: str) -> bool:
 
     Returns:
         valid (bool): a flag indicating if a cigar string is valid one.
+
+    Examples:
+        >>> is_valid_cigar("M")
+        False
+
+        >>> is_valid_cigar("10")
+        False
+
+        >>> is_valid_cigar("10M10")
+        False
+
+        >>> is_valid_sigar("10M10D")
+        True
     """
     # can't be an empty one
     if not cigar:
