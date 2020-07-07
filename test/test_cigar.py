@@ -1,4 +1,4 @@
-from hypothesis import given, settings
+from hypothesis import given
 import hypothesis.strategies as st
 import string
 
