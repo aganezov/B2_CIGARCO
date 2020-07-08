@@ -48,7 +48,7 @@ def test_prefix_sum_array_lazy_computation(ex_alignment):
     mapper.compute_query_prefix_sums = MagicMock(side_effect=mapper.compute_query_prefix_sums)
     query_prefix_sums = mapper.query_prefix_sums
     target_prefix_sums = mapper.target_prefix_sums
-    assert len(query_prefix_sums) > 1  # for the smallest CIGAR string (i.e., op count, operation) the length of the prefix sum array is going to be 2
+    assert len(query_prefix_sums) > 0  # for the smallest CIGAR string (i.e., op count, operation) the length of the prefix sum array is going to be 2
     assert len(query_prefix_sums) == len(target_prefix_sums)  # must be the same for query and for target, as nonconsuming operations for each type are counted as 0
     mapper.compute_target_prefix_sums.assert_called()
     mapper.compute_query_prefix_sums.assert_called()
@@ -68,17 +68,18 @@ def test_prefix_array_computation_logic(data):
     inefficient O(n^2), though explicit computation of prefix sums in the test, but the algorithm implementation is more efficient O(n)
     """
     prefix_sums = CMapper.compute_prefix_sums(data)
-    assert len(prefix_sums) == len(data) + 1
-    assert prefix_sums[-1] == sum(data)
+    assert len(prefix_sums) == len(data)
+    if len(prefix_sums) > 0:
+        assert prefix_sums[-1] == sum(data)
     for i in range(len(data)):
-        assert prefix_sums[i] == sum(data[:i])
+        assert prefix_sums[i] == sum(data[:i + 1])
 
 
 def test_prefix_sums_arrays_inference(ex_alignment):
     mapper = CMapper(ex_alignment)
     # the following prefix sums are based on the CIGAR string "8M7D6M2I2M11D7M" in the example_alignment object
-    query_prefix_sums = [0, 8, 8, 14, 16, 18, 18, 25]
-    target_prefix_sums = [0, 8, 15, 21, 21, 23, 34, 41]
+    query_prefix_sums = [8, 8, 14, 16, 18, 18, 25]
+    target_prefix_sums = [8, 15, 21, 21, 23, 34, 41]
     for true, inferred in zip(query_prefix_sums, mapper.query_prefix_sums):
         assert true == inferred
     for true, inferred in zip(target_prefix_sums, mapper.target_prefix_sums):

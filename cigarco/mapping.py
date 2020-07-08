@@ -109,8 +109,7 @@ class CMapper(object):
         """
         Stateless (thus staticmethod) utility function that computes prefix sums array for a given integer array.
         For a given array A a prefix sum array A' is defined as follows:
-            A'[0] = 0
-            for i > 0: A'[i] = sum(A[0] ... A[i-1])
+            for i >= 0: A'[i] = sum(A[0] ... A[i])
         Provided implementation works in linear O(n) time, where `n` is the length of the input array
 
         Args:
@@ -121,14 +120,15 @@ class CMapper(object):
 
         Examples:
             >>> CMapper.compute_prefix_sums([1,2,3])
-            [0,1,3,6]
+            [1,3,6]
 
             >>> CMapper.compute_prefix_sums([])
-            [0]
+            []
         """
-        result = [0]
+        result: List[int] = []
         for v in values:
-            result.append(result[-1] + v)
+            last_sum: int = result[-1] if len(result) > 0 else 0
+            result.append(last_sum + v)
         return result
 
     def transform_coordinate(self, source_coordinate: int) -> int:
