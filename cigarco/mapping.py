@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Tuple
+from itertools import accumulate
 
 from cigarco.cigar_utils import is_valid_cigar, parse_cigar, TARGET_CONSUMING_OPERATIONS, QUERY_CONSUMING_OPERATIONS
 
@@ -125,11 +126,7 @@ class CMapper(object):
             >>> CMapper.compute_prefix_sums([])
             []
         """
-        result: List[int] = []
-        for v in values:
-            last_sum: int = result[-1] if len(result) > 0 else 0
-            result.append(last_sum + v)
-        return result
+        return list(accumulate(values))
 
     def transform_coordinate(self, source_coordinate: int) -> int:
         """
