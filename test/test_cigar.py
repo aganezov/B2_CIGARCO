@@ -40,14 +40,14 @@ def test_invalid_cigar_unsupported_operation_character(n1, operation, n2, unsupp
 
 
 @st.composite
-def cigar_decomposition(draw):
+def decomposed_cigars(draw):
     counts = draw(st.lists(elements=st.integers(min_value=0), min_size=1, max_size=1000000000))
     operations = draw(st.lists(elements=st.text(alphabet=ALLOWED_OPERATIONS, min_size=1, max_size=1), min_size=1, max_size=1000000000))
     size = min(len(counts), len(operations))
     return counts[:size], operations[:size]
 
 
-@given(values=cigar_decomposition())
+@given(values=decomposed_cigars())
 def test_cigar_split(values):
     counts, operations = values
     assert len(counts) == len(operations)
