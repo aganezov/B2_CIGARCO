@@ -130,3 +130,25 @@ class CMapper(object):
         for v in values:
             result.append(result[-1] + v)
         return result
+
+    def transform_coordinate(self, source_coordinate: int) -> int:
+        """
+        The main method to be invoked for coordinate transformation from query -> target coordinate systems.
+        Uses precomputed (or lazily evaluated on the first invocation) prefix sums arrays for query/target consuming operations and binary search for efficient lookup.
+        Also utilizes memoization to reduce computational load in case of identical transformation requests (cache is invalidated if the alignment object is altered)
+
+        Coordinates that map to insertion in query (w.r.t. target) are transformed to the coordinate of the insertion start
+            (i.e., the last target coordinate before the insertion seq)
+
+        Args:
+            source_coordinate (int): source coordinate in query coordinate system to be translated to the target coordinate system
+
+        Returns:
+            target coordinate (int): a position that the argument source coordinate maps to in the target sequence
+
+        Raises:
+            ValueError: if the input source coordinate is negative or greater than the length of the query sequence
+        """
+        if source_coordinate < 0 or source_coordinate > self.query_prefix_sums[-1] - 1:
+            # last value in prefix sums array is the length of the query, but we need to account for the 0-based index we
+            raise ValueError(f"Can't transform coordinate {source_coordinate}, outside of query coordinate system")

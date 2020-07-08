@@ -17,6 +17,11 @@ def ex_alignment():
     return Alignment("tr1", "chr1", 3, "8M7D6M2I2M11D7M")
 
 
+@pytest.fixture()
+def ex_cmapper(ex_alignment):
+    return CMapper(ex_alignment)
+
+
 def test_prefix_sum_array_lazy_initialization(ex_alignment):
     """
     This test checks that upon creation of the CMapper object the data-storing protected attributes _X_prefix_sums that store prefix sums for target and query consuming operation
@@ -78,3 +83,21 @@ def test_prefix_sums_arrays_inference(ex_alignment):
         assert true == inferred
     for true, inferred in zip(target_prefix_sums, mapper.target_prefix_sums):
         assert true == inferred
+
+
+@given(coord=st.integers(max_value=-1))
+def test_coordinate_mapping_qt_invalid_negative(coord, ex_cmapper):
+    """
+    Only non-negative coordinate are allowed for transformation between query and target coordinate systems
+    """
+    with pytest.raises(ValueError):
+        ex_cmapper.transform_coordinate(coord)
+
+
+@given(coord=st.integers(min_value=25))
+def test_coordinate_mapping_qt_invalid_over_query_length(coord, ex_cmapper):
+    """
+    Coordinates have to be <= the 0based length of the query sequence
+    """
+    with pytest.raises(ValueError):
+        ex_cmapper.transform_coordinate(coord)
