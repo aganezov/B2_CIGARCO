@@ -1,8 +1,11 @@
 import bisect
+from collections import namedtuple
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import List, Tuple, Set, Optional, Dict
 from itertools import accumulate
+
+import typing
 
 from cigarco.cigar_utils import is_valid_cigar, parse_cigar, TARGET_CONSUMING_OPERATIONS, QUERY_CONSUMING_OPERATIONS
 
@@ -238,8 +241,40 @@ class CMapper(object):
         return hash(self.alignment)
 
 
+@dataclass(frozen=True, eq=True)
+class TransformedCoordinate(object):
+    """
+    Simple holder class for the result of coordinate transformation where both the target seq and the transformed coordinate values are held
+    Allows for nice data ncapsulation, while not eating almost any extra space, because of the __slots__ usage
+    """
+    __slots__ = ('seq_name', 'coordinate')
+    seq_name: str
+    coordinate: int
+
+
 @dataclass
 class CManager(object):
+    """ Main class that manages storage of multiple alignments (one alignment per query) and allows for efficient coordinate transformation from query coordinate system
+            to that of the alignment target one
+        Outsources the actual computations to the CMapper class, that is created for every added alignment
+        Keeps track of added alignments so as to when an identical alignment is added no recomputation is going to be performed
+
+        First query for a given alignment takes O(m) + O(log(m)), where m is the number of operation in the alignment CIGAR string
+        Subsequent queries of previously UNqueried values take O(log(m))
+        Queries are cached, so subsequent queries of previously queried values take O(1)
+
+        Examples:
+            # setup
+             >>> m = CManager()
+             >>> m.add_alignment(Alignment("TR1", "CHR1", 3, "8M7D6M2I2M11D7M"))
+             >>> m.add_alignment(Alignment("TR2", "CHR2", 10, "20M"))
+             # quering
+             >>> m.transform_coordinate("TR1", 4)
+             TransformedCoordinate(seq_name="CHR1", coordinate=7)
+             >>> m.transform_coordinate("TR2", 0)
+             TransformedCoordinate(seq_name="CHR2", coordinate=10)
+
+    """
     alignments_by_query_ids: Dict[str, CMapper] = field(default_factory=lambda: {})
 
     def add_alignment(self, alignment: Alignment):
@@ -256,3 +291,27 @@ class CManager(object):
                 self.alignments_by_query_ids[alignment.query_name].alignment = alignment
         else:
             self.alignments_by_query_ids[alignment.query_name] = CMapper(alignment)
+
+    def transform_coordinate(self, query_name: str, source_coordinate: int) -> TransformedCoordinate:
+        """ The main computational method for coordinate transformation for a given position in a specified query
+        On its own just checks if the mapper for a given query exists and then outsources the actual new coordinate value computation to it
+        Caching is implemented at the level of a mapper, and not here, as with addition of (new) alignments only parts of cache would ideally be invalidated (for respective query),
+            but this is not feasible with basic lru_cache, though at the level of the mapper this is exactly what is implemented
+
+        Args:
+            query_name (str): name of the query for which alignment the coordinate transformation is going to take place
+            source_coordinate (int): a coordinate on specified query, which is going to be transformed into a alignment target corodinate system
+
+        Returns:
+            transformed coordinate (TransformedCoordinate): a dataclass (akin to pair tuple) of a name of a target sequence,
+                and a transformed query coordinate in target coordinate system
+
+        Raises:
+            ValueError: if the supplied query does not have an alignment, or if the coordinate transformation fails (propagated from CMapper.transform_coordinate method)
+        """
+        if query_name not in self.alignments_by_query_ids:
+            raise ValueError(f"Attempted to transform coordinate {source_coordinate} for query '{query_name}', but no alignments for '{query_name}' exist")
+        mapper: CMapper = self.alignments_by_query_ids[query_name]
+        target_seq_name: str = mapper.alignment.target_name
+        result_coordinate: int = mapper.transform_coordinate(source_coordinate)
+        return TransformedCoordinate(target_seq_name, result_coordinate)
