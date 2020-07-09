@@ -1,11 +1,13 @@
-from dataclasses import dataclass
-from typing import List, Tuple
+import bisect
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import List, Tuple, Set, Optional
 from itertools import accumulate
 
 from cigarco.cigar_utils import is_valid_cigar, parse_cigar, TARGET_CONSUMING_OPERATIONS, QUERY_CONSUMING_OPERATIONS
 
 
-@dataclass
+@dataclass(frozen=True, eq=True)
 class Alignment(object):
     """
     An alignment class an instance of which contains all the information about a given query->target alignment
@@ -21,7 +23,7 @@ class Alignment(object):
     """
     query_name: str
     target_name: str
-    start: int          # no default value of 0 specified as different schools of thought may have 0 or 1 as defaults, and explicit is better than implicit
+    start: int  # no default value of 0 specified as different schools of thought may have 0 or 1 as defaults, and explicit is better than implicit
     cigar: str
 
     def __post_init__(self):
@@ -34,6 +36,22 @@ class Alignment(object):
             raise ValueError(f"incorrect start coordinate {self.start}. Must be a non-negative integer")
         if not is_valid_cigar(self.cigar):
             raise ValueError(f"invalid CIGAR string '{self.cigar}'")
+
+
+class AlignmentDescriptor(object):
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner=None) -> Optional[Alignment]:
+        return instance.__dict__.get(self.name)
+
+    def __set__(self, instance, value):
+        if isinstance(instance, CMapper):
+            instance._query_prefix_sums = None
+            instance._target_prefix_sums = None
+            instance._matching_backtracking = None
+            instance.transform_coordinate.cache_clear()
+        instance.__dict__[self.name] = value
 
 
 @dataclass
@@ -55,9 +73,11 @@ class CMapper(object):
     Args:
         alignment (Alignments): an alignment object for which the coordinate conversion (i.e., mapping) is performed. Alignment object is assumed to be valid
     """
-    alignment: Alignment
-    _query_prefix_sums: List[int] = None
-    _target_prefix_sums: List[int] = None
+    alignment: Alignment = AlignmentDescriptor()
+    _alignment: Alignment = field(init=False, repr=False, compare=False)
+    _query_prefix_sums: Optional[List[int]] = field(init=False, repr=False, compare=False)
+    _target_prefix_sums: Optional[List[int]] = field(init=False, repr=False, compare=False)
+    _matching_backtracking: Optional[List[int]] = field(init=False, repr=False, compare=False)
 
     @property
     def query_prefix_sums(self) -> List[int]:
@@ -95,6 +115,22 @@ class CMapper(object):
             self.compute_target_prefix_sums()
         return self._target_prefix_sums
 
+    @property
+    def matching_backtracking(self) -> List[int]:
+        if self._matching_backtracking is None:
+            self._matching_backtracking = self.compute_matching_backtracking()
+        return self._matching_backtracking
+
+    def compute_matching_backtracking(self) -> List[int]:
+        last_match_index: int = -1
+        result: List[int] = []
+        qt_consuming_operations: Set[str] = QUERY_CONSUMING_OPERATIONS & TARGET_CONSUMING_OPERATIONS
+        for index, (cnt, op) in enumerate(parse_cigar(self.alignment.cigar)):
+            if cnt > 0 and op in qt_consuming_operations:
+                last_match_index = index
+            result.append(last_match_index)
+        return result
+
     def compute_target_prefix_sums(self):
         """
         Computes prefix sums array for target consuming operations in the alignment object's CIGAR string
@@ -103,7 +139,7 @@ class CMapper(object):
         """
         cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar)
         target_op_cnts = [cnt if op in TARGET_CONSUMING_OPERATIONS else 0 for cnt, op in cigar_operations]
-        self._target_prefix_sums = self.compute_prefix_sums(target_op_cnts)   # TODO: remove dummy implementation
+        self._target_prefix_sums = self.compute_prefix_sums(target_op_cnts)  # TODO: remove dummy implementation
 
     @staticmethod
     def compute_prefix_sums(values: List[int]) -> List[int]:
@@ -128,6 +164,7 @@ class CMapper(object):
         """
         return list(accumulate(values))
 
+    @lru_cache(maxsize=None)
     def transform_coordinate(self, source_coordinate: int) -> int:
         """
         The main method to be invoked for coordinate transformation from query -> target coordinate systems.
@@ -145,7 +182,57 @@ class CMapper(object):
 
         Raises:
             ValueError: if the input source coordinate is negative or greater than the length of the query sequence
+
+        Examples:
+            >>> CMapper(Alignment("tr1", "chr1", 3, "8M7D6M2I2M11D7M")).transform_coordinate(4)
+            7
+
+            >>> CMapper(Alignment("tr1", "chr1", 3, "8M7D6M2I2M11D7M")).transform_coordinate(13)
+            23
+
+            >>> CMapper(Alignment("tr2", "chr2", 10, "20M")).transform_coordinate(0)
+            10
+
+            >>> CMapper(Alignment("tr2", "chr2", 10, "20M")).transform_coordinate(10)
+            20
         """
-        if source_coordinate < 0 or source_coordinate > self.query_prefix_sums[-1] - 1:
-            # last value in prefix sums array is the length of the query, but we need to account for the 0-based index we
+        if source_coordinate < 0 or source_coordinate > max(0, self.query_prefix_sums[-1] - 1):
+            # last value in prefix sums array is the length of the query, but we need to account for the 0-based index
             raise ValueError(f"Can't transform coordinate {source_coordinate}, outside of query coordinate system")
+        # identifies the last operation that would have consumed x <= source_coordinate bases in th query
+        operation_index: int = bisect.bisect_right(self.query_prefix_sums, source_coordinate)
+
+        # special edge case where the alignment cigar string has no query consuming operations, in which case we default to the beginning of the alignment
+        # while highly improbable -- still allowed by the CIGAR specification in the SAM format
+        if source_coordinate == 0 and self.query_prefix_sums[-1] == 0:
+            return self.alignment.start
+
+        # sanity check, does not waste resources at all, but if really needed, can be avoided with with -O flag in execution
+        assert 0 <= operation_index <= len(self.query_prefix_sums) - 1
+
+        # we get the operation index for the last stretch where there was a match between query an alignment,
+        #   this is needed for ensuring that coordinates in non-target-consuming operations (i.e., insertions) map to the left-closest matching position
+        last_matching_index: int = self.matching_backtracking[operation_index]
+
+        # computing how much query has been consumed by the latest operation not covering the queried coordinate,
+        #   this is required for figure out how much of a non-consumed query we are left with
+        query_consumed: int = 0 if operation_index == 0 else self.query_prefix_sums[operation_index - 1]
+
+        # computing the amount of target-matching query we are left with
+        #   of the last_matching index and operation indexes don't match, we are in the non-target-consuming are need to set remaining query length to -1,
+        #   to ensure left-padded insertion coordinate mapping
+        query_remaining = -1 if operation_index != last_matching_index else (source_coordinate - query_consumed)
+
+        # if we are in a matching operation, we need to decrement the matching operation index by 1 to ensure that we correctly calculate consumed target sequence
+        #   (up until the identified operation)
+        last_matching_index -= int(last_matching_index == operation_index)
+
+        # target is only consumed to the last matching operation (not counting the one in which the query coordinate lies)
+        target_consumed: int = 0 if last_matching_index < 0 else self.target_prefix_sums[last_matching_index]
+
+        # we need to ensure that we don't end up with negative offset, which can come from weird valid CIGAR strings and the setup above (e.g., "I5")
+        result: int = self.alignment.start + max(target_consumed + query_remaining, 0)
+        return result
+
+    def __hash__(self):
+        return hash(self.alignment)
