@@ -138,7 +138,7 @@ def test_coordinate_mapping_qt_ex2(coord, ex_cmapper2):
 
 
 @st.composite
-def alignment_tasks(draw):
+def basic_decomposed_alignment_task(draw):
     decomposed_cigar = draw(decomposed_cigars())
     data = list(zip(*decomposed_cigar))
     query_length = CMapper.compute_prefix_sums([cnt if op in QUERY_CONSUMING_OPERATIONS else 0 for cnt, op in data])[-1]
@@ -149,7 +149,7 @@ def alignment_tasks(draw):
 @given(query_name=st.text(),
        target_name=st.text(),
        start=st.integers(min_value=0),
-       alignment_task=alignment_tasks())
+       alignment_task=basic_decomposed_alignment_task())
 def test_coordinate_mapping_qt_random(query_name: str, target_name: str, start: int, alignment_task: Tuple[List[Tuple[int, str]], int]):
     """
     This test describes the overall logic between coordinate transformation from query to target coordinate systems.
