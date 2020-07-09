@@ -1,7 +1,7 @@
 import bisect
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import List, Tuple, Set, Optional
+from typing import List, Tuple, Set, Optional, Dict
 from itertools import accumulate
 
 from cigarco.cigar_utils import is_valid_cigar, parse_cigar, TARGET_CONSUMING_OPERATIONS, QUERY_CONSUMING_OPERATIONS
@@ -236,3 +236,23 @@ class CMapper(object):
 
     def __hash__(self):
         return hash(self.alignment)
+
+
+@dataclass
+class CManager(object):
+    alignments_by_query_ids: Dict[str, CMapper] = field(default_factory=lambda: {})
+
+    def add_alignment(self, alignment: Alignment):
+        """
+        Wrapper method that adds a new Alignment instance to the internal structure of the Manager, and wraps the alignment object into CMapper object
+        When addition of a duplicate alignment is attempted, no action is performed, thus keeping the potentially computed coordinate transformation data structures intact
+
+        Args:
+            alignment (Alignment): an instance of an Alignment class
+        """
+        if alignment.query_name in self.alignments_by_query_ids:
+            mapper = self.alignments_by_query_ids[alignment.query_name]
+            if mapper.alignment != alignment:
+                self.alignments_by_query_ids[alignment.query_name].alignment = alignment
+        else:
+            self.alignments_by_query_ids[alignment.query_name] = CMapper(alignment)
