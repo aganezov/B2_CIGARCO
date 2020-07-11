@@ -9,6 +9,16 @@ def test_empty_cigar_validity():
     assert not is_valid_cigar("")
 
 
+@given(number=st.integers(max_value=-1), operation=st.text(alphabet=ALLOWED_OPERATIONS, min_size=1, max_size=1))
+def test_invalid_cigar_string_negative_number(number, operation):
+    assert not is_valid_cigar(f"{number}{operation}")
+
+
+@given(number=st.floats(min_value=0), operation=st.text(alphabet=ALLOWED_OPERATIONS, min_size=1, max_size=1))
+def test_invalid_cigar_string_float_number(number, operation):
+    assert not is_valid_cigar(f"{number}{operation}")
+
+
 @given(number=st.integers(min_value=0), operation=st.text(alphabet=ALLOWED_OPERATIONS, min_size=2, max_size=100))
 def test_invalid_cigar_consecutive_letters(number, operation):
     assert not is_valid_cigar(f"{number}{operation}")
@@ -40,9 +50,9 @@ def test_invalid_cigar_unsupported_operation_character(n1, operation, n2, unsupp
 
 
 @st.composite
-def decomposed_cigars(draw):
-    counts = draw(st.lists(elements=st.integers(min_value=0), min_size=1, max_size=1000000000))
-    operations = draw(st.lists(elements=st.text(alphabet=ALLOWED_OPERATIONS, min_size=1, max_size=1), min_size=1, max_size=1000000000))
+def decomposed_cigars(draw, max_size=100000000):
+    counts = draw(st.lists(elements=st.integers(min_value=0), min_size=1, max_size=max_size))
+    operations = draw(st.lists(elements=st.text(alphabet=ALLOWED_OPERATIONS, min_size=1, max_size=1), min_size=1, max_size=max_size))
     size = min(len(counts), len(operations))
     return counts[:size], operations[:size]
 

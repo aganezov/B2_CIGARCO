@@ -1,11 +1,8 @@
 import bisect
-from collections import namedtuple
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import List, Tuple, Set, Optional, Dict
 from itertools import accumulate
-
-import typing
+from typing import List, Tuple, Set, Optional, Dict
 
 from cigarco.cigar_utils import is_valid_cigar, parse_cigar, TARGET_CONSUMING_OPERATIONS, QUERY_CONSUMING_OPERATIONS
 
@@ -42,6 +39,9 @@ class Alignment(object):
 
 
 class AlignmentDescriptor(object):
+    """
+    A descriptor designed for controlling access to the .alignment attribute in the CMapper class object to ensure that all precomputed data structures are invalidated
+    """
     def __set_name__(self, owner, name):
         self.name = name
 
@@ -49,6 +49,10 @@ class AlignmentDescriptor(object):
         return instance.__dict__.get(self.name)
 
     def __set__(self, instance, value):
+        """
+        On access to the .alignment attribute, if the target class is a CMapper (we don't care about other classes),
+            we want to ensure that the prefix sums arrays are invalidated, and the cache on the coordinate transformation function is cleared
+        """
         if isinstance(instance, CMapper):
             instance._query_prefix_sums = None
             instance._target_prefix_sums = None
@@ -62,12 +66,16 @@ class CMapper(object):
     """
     The main object that provides coordinate conversion for a given Alignment object.
     The main computational idea behind the CMapper machinery is the prefix sum arrays, which are used to efficiently convert the query coordinate to the target coordinate
+    Coordinates that map to the insertion in the query are transformed to coordinate of he last matching character in the alignment (or 0 if no exists)
 
     Several optimization techniques are utilized to speed up the process:
         * prefix sum arrays are computed only once on first access via a combination of private attributes and property access control
-        * alignment object reassignment (controlled via property setter) invalidates the computed prefix sums ensuring that coordinate mapping is always done
-            w.r.t. current alignment; Note: changes in alignment object are nto tracked, though this can be implemented in the future via a descriptor-protocol on alignment
-        * cashing is utilized for mapping function
+        * alignment object reassignment (controlled via a descriptor protocol) invalidates the computed prefix sums ensuring that coordinate mapping is always done
+            w.r.t. current alignment;
+        * cashing is utilized for mapping function (invalidated on alternation to alignment attribute object)
+        * for efficient identification of the last matching character in the alignment, when translating coordinates that fall within insertions,
+            we compute an matching backtracking array that specifies where is the last query & target consuming alignment operation w.r.t. to a current one
+
 
     Overall complexity of the CMapper is dependent on the size n of the CIGAR alignment string (where n refers to the number of operations in a parsed CIGAR string):
         * prefix sum construction takes O(n); on first access only
@@ -125,6 +133,14 @@ class CMapper(object):
         return self._matching_backtracking
 
     def compute_matching_backtracking(self) -> List[int]:
+        """
+        In linear time computes the matching backtracking array that helps to speed up the lookup for the last query & target consuming operation,
+            thus ensuring the stability of the running time of the transformation algorithm
+
+        Returns:
+            Matching backtrack(List[int]): a list of indexes that specify what is the index of the last query & target consuming alignment operation w.r.t. the given one
+                (can be itself)
+        """
         last_match_index: int = -1
         result: List[int] = []
         qt_consuming_operations: Set[str] = QUERY_CONSUMING_OPERATIONS & TARGET_CONSUMING_OPERATIONS
@@ -242,14 +258,28 @@ class CMapper(object):
 
 
 @dataclass(frozen=True, eq=True)
-class TransformedCoordinate(object):
+class TransformationEntry(object):
     """
-    Simple holder class for the result of coordinate transformation where both the target seq and the transformed coordinate values are held
-    Allows for nice data ncapsulation, while not eating almost any extra space, because of the __slots__ usage
+    Simple holder class for the sequence name and coordinate for/of transformation
+    Allows for nice data encapsulation, while not eating almost any extra space, because of the __slots__ usage
     """
     __slots__ = ('seq_name', 'coordinate')
     seq_name: str
     coordinate: int
+
+
+@dataclass(frozen=True, eq=True)
+class TransformedResult(TransformationEntry):
+    """
+        Marker class to allow for type safety, if desired
+    """
+
+
+@dataclass(frozen=True, eq=True)
+class TransformationQuery(TransformationEntry):
+    """
+        Marker class to allow for type safety, if desired
+    """
 
 
 @dataclass
@@ -292,7 +322,7 @@ class CManager(object):
         else:
             self.alignments_by_query_ids[alignment.query_name] = CMapper(alignment)
 
-    def transform_coordinate(self, query_name: str, source_coordinate: int) -> TransformedCoordinate:
+    def transform_coordinate(self, query_name: str, source_coordinate: int) -> TransformedResult:
         """ The main computational method for coordinate transformation for a given position in a specified query
         On its own just checks if the mapper for a given query exists and then outsources the actual new coordinate value computation to it
         Caching is implemented at the level of a mapper, and not here, as with addition of (new) alignments only parts of cache would ideally be invalidated (for respective query),
@@ -314,4 +344,4 @@ class CManager(object):
         mapper: CMapper = self.alignments_by_query_ids[query_name]
         target_seq_name: str = mapper.alignment.target_name
         result_coordinate: int = mapper.transform_coordinate(source_coordinate)
-        return TransformedCoordinate(target_seq_name, result_coordinate)
+        return TransformedResult(target_seq_name, result_coordinate)

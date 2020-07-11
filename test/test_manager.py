@@ -3,23 +3,22 @@ from copy import deepcopy
 from typing import List, Tuple
 
 import pytest
-import typing
 from hypothesis import given
 
 from cigarco.cigar_utils import QUERY_CONSUMING_OPERATIONS
-from cigarco.mapping import CManager, Alignment, CMapper, TransformedCoordinate
+from cigarco.mapping import CManager, Alignment, CMapper, TransformedResult
 import hypothesis.strategies as st
 
 from test.test_cigar import decomposed_cigars
 
 
 def test_manager_creation():
-    manager = CManager()
+    CManager()
 
 
 @st.composite
-def alignments(draw):
-    decomposed_cigar = draw(decomposed_cigars())
+def alignments(draw, max_cigar_op_cnt=100000000):
+    decomposed_cigar = draw(decomposed_cigars(max_size=max_cigar_op_cnt))
     cigar_string = "".join(f"{cnt}{op}" for cnt, op in zip(*decomposed_cigar))
     query_name = draw(st.text())
     target_name = draw(st.text())
@@ -63,8 +62,8 @@ def test_preservation_of_mapper(alignment: Alignment):
 
 
 @st.composite
-def transformation_tasks(draw):
-    decomposed_cigar = draw(decomposed_cigars())
+def transformation_tasks(draw, max_al_length=10000000):
+    decomposed_cigar = draw(decomposed_cigars(max_size=max_al_length))
     cigar_string = "".join(f"{cnt}{op}" for cnt, op in zip(*decomposed_cigar))
     query_length = 0
     for cnt, op in zip(*decomposed_cigar):
@@ -82,7 +81,7 @@ def test_coordinate_transformation_qt(transformation_task: Tuple[Alignment, int]
     manager: CManager = CManager()
     alignment, coordinate = transformation_task
     manager.add_alignment(alignment)
-    transformed_coordinate: TransformedCoordinate = manager.transform_coordinate(alignment.query_name, coordinate)
+    transformed_coordinate: TransformedResult = manager.transform_coordinate(alignment.query_name, coordinate)
     assert transformed_coordinate.seq_name == alignment.target_name
     assert transformed_coordinate.coordinate == manager.alignments_by_query_ids[alignment.query_name].transform_coordinate(coordinate)
 
