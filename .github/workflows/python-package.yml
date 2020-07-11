@@ -31,3 +31,7 @@ jobs:
     - name: Test with pytest
       run: |
         python -m pytest -p no:warnings
+    - name: Test cli utility
+      run: |
+        python setup.py develop
+        cigarco -a test/data/ex1_als.tsv -q test/data/ex2_qs.tsv
