@@ -20,7 +20,7 @@ setup(
     include_package_data=True,
     entry_points={
         "console_scripts": [
-            "cigarco = cigarco.app:main",
+            "cigarco = cigarco.app:execute_script",
         ]
     },
     install_requires=["pytest", "hypothesis"]

@@ -64,7 +64,7 @@ def test_alignment_streamer_iteration_invalid_entry_too_few_values_fail(alignmen
 @st.composite
 def invalid_coordinate_str_entries(draw):
     invalid_numeric_value = str(draw(st.integers(max_value=-1)))
-    non_numerical_value = draw(st.text().filter(lambda e: not e.isnumeric()))
+    non_numerical_value = draw(st.text().filter(lambda e: not e.isnumeric() and e != "-0"))
     selection = draw(st.integers(min_value=0, max_value=1))
     return [invalid_numeric_value, non_numerical_value][selection]
 
