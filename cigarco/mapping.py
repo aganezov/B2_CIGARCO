@@ -17,6 +17,7 @@ class Alignment(object):
         target_name (str): a name of the target for the represented alignment
         start (int): a start coordinate for the query alignment w.r.t. to the target
         cigar (str): a CIGAR encoded (doc: https://samtools.github.io/hts-specs/SAMv1.pdf , page 7) alignment of the query to the target
+        direction (bool): a flag to indicate 5'->3' (True) and 3'->5' (False) alignment orientation
 
     Example:
         Alignment("tr1", "chr1" 0, "11M")
@@ -25,6 +26,7 @@ class Alignment(object):
     target_name: str
     start: int  # no default value of 0 specified as different schools of thought may have 0 or 1 as defaults, and explicit is better than implicit
     cigar: str
+    direction: bool = True
 
     def __post_init__(self):
         """
@@ -109,7 +111,7 @@ class CMapper(object):
 
         TODO: rewrite with iterators approach
         """
-        cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar)
+        cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar, direction=self.alignment.direction)
         query_op_cnts = [cnt if op in QUERY_CONSUMING_OPERATIONS else 0 for cnt, op in cigar_operations]
         self._query_prefix_sums = self.compute_prefix_sums(query_op_cnts)
 
@@ -153,12 +155,10 @@ class CMapper(object):
     def compute_target_prefix_sums(self):
         """
         Computes prefix sums array for target consuming operations in the alignment object's CIGAR string
-
-        TODO: rewrite with iterators approach
         """
-        cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar)
+        cigar_operations: List[Tuple[int, str]] = parse_cigar(self.alignment.cigar, direction=self.alignment.direction)
         target_op_cnts = [cnt if op in TARGET_CONSUMING_OPERATIONS else 0 for cnt, op in cigar_operations]
-        self._target_prefix_sums = self.compute_prefix_sums(target_op_cnts)  # TODO: remove dummy implementation
+        self._target_prefix_sums = self.compute_prefix_sums(target_op_cnts)
 
     @staticmethod
     def compute_prefix_sums(values: List[int]) -> List[int]:
@@ -224,7 +224,7 @@ class CMapper(object):
         # special edge case where the alignment cigar string has no query consuming operations, in which case we default to the beginning of the alignment
         # while highly improbable -- still allowed by the CIGAR specification in the SAM format
         if source_coordinate == 0 and self.query_prefix_sums[-1] == 0:
-            return self.alignment.start
+            return self.alignment.start + int(not self.alignment.direction) * self.target_prefix_sums[-1]
 
         # sanity check, does not waste resources at all, but if really needed, can be avoided with with -O flag in execution
         assert 0 <= operation_index <= len(self.query_prefix_sums) - 1
@@ -250,7 +250,10 @@ class CMapper(object):
         target_consumed: int = 0 if last_matching_index < 0 else self.target_prefix_sums[last_matching_index]
 
         # we need to ensure that we don't end up with negative offset, which can come from weird valid CIGAR strings and the setup above (e.g., "I5")
-        result: int = self.alignment.start + max(target_consumed + query_remaining, 0)
+        if self.alignment.direction:
+            result: int = self.alignment.start + max(target_consumed + query_remaining, 0)
+        else:
+            result: int = self.alignment.start + self.target_prefix_sums[-1] - 1 - max(target_consumed + query_remaining, 0)
         return result
 
     def __hash__(self):

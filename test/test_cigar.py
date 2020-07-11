@@ -68,3 +68,16 @@ def test_cigar_split(values):
     for true, inferred in zip(cigar_string_data, parsed_data):
         assert true[0] == inferred[0]
         assert true[1] == inferred[1]
+
+
+@given(values=decomposed_cigars())
+def test_cigar_split_reverse(values):
+    counts, operations = values
+    assert len(counts) == len(operations)
+    cigar_string_data = [(c, o) for c, o in zip(counts, operations)]
+    cigar_string = "".join(f"{c}{o}" for c, o in cigar_string_data)
+    parsed_data = parse_cigar(cigar_string, direction=False)
+    assert len(cigar_string_data) == len(parsed_data)
+    for true, inferred in zip(cigar_string_data[::-1], parsed_data):
+        assert true[0] == inferred[0]
+        assert true[1] == inferred[1]

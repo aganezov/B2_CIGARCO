@@ -1,5 +1,5 @@
 import re
-from typing import Tuple, List
+from typing import Tuple, List, Iterator
 
 ALLOWED_OPERATIONS = {'M', "I", "D", "N", "S", "H", "P", "=", "X"}
 QUERY_CONSUMING_OPERATIONS = ALLOWED_OPERATIONS - {"D", "N", "H", "P"}
@@ -58,13 +58,14 @@ def is_valid_cigar(cigar: str) -> bool:
     return True
 
 
-def parse_cigar(cigar: str) -> List[Tuple[int, str]]:
+def parse_cigar(cigar: str, direction: bool = True) -> List[Tuple[int, str]]:
     """
     Parses a given CIGAR encoded string into a list of tuples (count, operation)
     No internal checks for the validity of the input CIGAR string are made
 
     Args:
         cigar (str): CIGAR encoded string
+        direction (bool): direction of the alignment (True) for forward, and (False) for reverse
 
     Returns:
         a list of tuples CIGAR operations (str) and their counts (List[Tuple[int, str]])
@@ -79,4 +80,6 @@ def parse_cigar(cigar: str) -> List[Tuple[int, str]]:
     result: List[Tuple[int, str]] = []
     for entry in re.finditer(CIGAR_REGEX, cigar):
         result.append((int(entry.groupdict()["count"]), entry.groupdict()["operation"]))
+    if not direction:
+        result.reverse()
     return result

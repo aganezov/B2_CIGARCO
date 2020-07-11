@@ -240,3 +240,24 @@ def test_mapping_transform_coordinate_cache_reset_on_alignment_attribute_update(
     assert mapper.transform_coordinate.cache_info().currsize == 1
     mapper.alignment = Alignment("1", "1", 3, "30M")
     assert mapper.transform_coordinate.cache_info().currsize == 0
+
+
+@pytest.fixture(scope="module")
+def ex_cmapper_reverse():
+    return CMapper(Alignment("tr1", "chr1", 3, "8M7D6M2I2M11D7M", False))
+
+
+@given(coord=st.integers(min_value=0, max_value=24))
+def test_mapping_transform_coordinate_reverse_qt_ex1(coord, ex_cmapper_reverse):
+    target_coord = ex_cmapper_reverse.transform_coordinate(coord)
+    assert 43 >= target_coord >= 3
+    if coord <= 6:
+        assert target_coord == 43 - coord
+    elif 6 < coord <= 8:
+        assert target_coord == 43 - 11 - coord
+    elif 8 < coord < 11:
+        assert target_coord == 24
+    elif 11 <= coord < 17:
+        assert target_coord == 43 - 11 + 2 - coord
+    elif 18 <= coord < 25:
+        assert target_coord == 43 - 11 + 2 - 7 - coord
