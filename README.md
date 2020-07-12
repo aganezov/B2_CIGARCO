@@ -8,7 +8,7 @@
 A toolkit for CLI- and API-based (re)mapping of alignment coordinates to/from reference coordinates based on CIGAR-encoded alignments.
 
 ### Contents:
-* [Design and complexity](#design-and-complexity)
+* [Design and complexity](#design-and-implementation)
 * [Installation](#installation)
 * [Usage](#usage)
 * [Future directions](#future-directions)
