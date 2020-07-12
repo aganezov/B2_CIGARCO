@@ -227,7 +227,7 @@ class CMapper(object):
             if self.alignment.direction:
                 source_coordinate -= self.alignment.start
             else:
-                source_coordinate = self.alignment.start + self.query_prefix_sums[-1] - 1 - source_coordinate
+                source_coordinate = self.alignment.start + query_prefix_sums[-1] - 1 - source_coordinate
 
         if source_coordinate < 0 or source_coordinate > max(0, query_prefix_sums[-1] - 1):
             # last value in prefix sums array is the length of the query, but we need to account for the 0-based index

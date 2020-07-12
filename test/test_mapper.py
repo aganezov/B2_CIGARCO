@@ -282,18 +282,18 @@ def test_mapping_transform_coordinate_tq_ex1(coord, ex_cmapper):
 
 
 @given(coord=st.integers(min_value=3, max_value=43))
-def test_mapping_transform_coordinate_reverse_tq_ex1(coord, ex_cmapper):
-    target_coord = ex_cmapper.transform_coordinate(coord, direction='TQ')
+def test_mapping_transform_coordinate_reverse_tq_ex1(coord, ex_cmapper_reverse):
+    target_coord = ex_cmapper_reverse.transform_coordinate(coord, direction='TQ')
     assert 0 <= target_coord <= 24
     if coord <= 10:
-        assert target_coord == coord - 3
-    elif 10 < coord < 18:
-        assert target_coord == 7
-    elif 18 <= coord < 24:
-        assert target_coord == coord - 3 - 7
+        assert target_coord == 24 - coord + 3
+    elif 10 < coord <= 18:
+        assert target_coord == 24 - 8
+    elif 18 < coord < 24:
+        assert target_coord == 24 - coord + 7 + 3
     elif 24 <= coord < 26:
-        assert target_coord == coord - 3 - 7 + 2
+        assert target_coord == 24 - coord + 7 - 2 + 3
     elif 26 <= coord < 37:
-        assert target_coord == 17
+        assert target_coord == 24 - 18
     elif 37 <= coord <= 43:
-        assert target_coord == coord - 3 - 7 - 11 + 2
+        assert target_coord == 24 - coord + 7 + 11 - 2 + 3
