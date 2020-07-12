@@ -151,7 +151,7 @@ def test_query_streamer_iteration_invalid_too_few_entries(query_string_list1, qu
 @given(query_string_list1=st.lists(query_strings()),
        query_string=query_strings(),
        query_string_list2=st.lists(query_strings()),
-       invalid_coordinate_str=st.text().filter(lambda e: not e.isnumeric()))
+       invalid_coordinate_str=st.text().filter(lambda e: not e.isnumeric() and e != "-0"))
 def test_test_query_streamer_iteration_invalid_coordinate(query_string_list1, query_string, query_string_list2, invalid_coordinate_str):
     split_q_string = query_string.split("\t")
     query_string = split_q_string[0] + "\t" + invalid_coordinate_str
