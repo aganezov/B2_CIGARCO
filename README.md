@@ -12,6 +12,8 @@ A toolkit for CLI- and API-based (re)mapping of alignment coordinates to/from re
 * [Installation](#installation)
 * [Usage](#usage)
 * [Future directions](#future-directions)
+* [Issues](#issues)
+* [Contributing](#contributing)
 
 ### Design and implementation
 
@@ -96,7 +98,18 @@ TR1 13  CHR1    23
 TR2 10  CHR2    20
 ```
 
-### Future direction
+### Future directions
+
+* An extension of the `CMapper` class functionality to include the transformation for the coordinate range, rather than just a single coordinate.
+Naive approach for this would result in a sequential calls to `transform_coordinate` function, but further optimization can be made to take into account parts of the range that are at covered by a single operation in an alignment CIGAR string.
+
+* Support for multiple alignments for a given query (i.e., secondary alignments, supplementary alignments, etc). 
+The most effective implementation would sort alignment entries by their order on reference, and then find the quitable alignment (if any) with binary search based on query-consuming alignment operations with soft-clip `S` not considered.
+
+* Application level support for target -> query conversion may need to take into account he possibility that multiple queries may be aligned to a single target (i.e., source sequence).
+
+* Implementation of high-load support at application level via a workflow (e.g., with [snakemake](https://snakemake.readthedocs.io/en/stable/)) wrapper setup, which would allow parallelization of the queries processing at given batches size, 
+ability to trace and rerun any failed jobs, and outsource submission of individual batch-tasks to cluster/cloud platforms.    
 
 
 ## Issues
