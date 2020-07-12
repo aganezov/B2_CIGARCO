@@ -20,12 +20,12 @@ def ex_alignment(scope="module"):
     return Alignment("tr1", "chr1", 3, "8M7D6M2I2M11D7M")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def ex_cmapper():
     return CMapper(Alignment("tr1", "chr1", 3, "8M7D6M2I2M11D7M"))
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def ex_cmapper2():
     return CMapper(Alignment("tr2", "chr1", 10, "20M"))
 
@@ -261,3 +261,39 @@ def test_mapping_transform_coordinate_reverse_qt_ex1(coord, ex_cmapper_reverse):
         assert target_coord == 43 - 11 + 2 - coord
     elif 18 <= coord < 25:
         assert target_coord == 43 - 11 + 2 - 7 - coord
+
+
+@given(coord=st.integers(min_value=3, max_value=43))
+def test_mapping_transform_coordinate_tq_ex1(coord, ex_cmapper):
+    target_coord = ex_cmapper.transform_coordinate(coord, direction='TQ')
+    assert 0 <= target_coord <= 24
+    if coord <= 10:
+        assert target_coord == coord - 3
+    elif 10 < coord < 18:
+        assert target_coord == 7
+    elif 18 <= coord < 24:
+        assert target_coord == coord - 3 - 7
+    elif 24 <= coord < 26:
+        assert target_coord == coord - 3 - 7 + 2
+    elif 26 <= coord < 37:
+        assert target_coord == 17
+    elif 37 <= coord <= 43:
+        assert target_coord == coord - 3 - 7 - 11 + 2
+
+
+@given(coord=st.integers(min_value=3, max_value=43))
+def test_mapping_transform_coordinate_reverse_tq_ex1(coord, ex_cmapper):
+    target_coord = ex_cmapper.transform_coordinate(coord, direction='TQ')
+    assert 0 <= target_coord <= 24
+    if coord <= 10:
+        assert target_coord == coord - 3
+    elif 10 < coord < 18:
+        assert target_coord == 7
+    elif 18 <= coord < 24:
+        assert target_coord == coord - 3 - 7
+    elif 24 <= coord < 26:
+        assert target_coord == coord - 3 - 7 + 2
+    elif 26 <= coord < 37:
+        assert target_coord == 17
+    elif 37 <= coord <= 43:
+        assert target_coord == coord - 3 - 7 - 11 + 2

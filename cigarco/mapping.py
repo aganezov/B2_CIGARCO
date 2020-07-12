@@ -184,7 +184,7 @@ class CMapper(object):
         return list(accumulate(values))
 
     @lru_cache(maxsize=None)
-    def transform_coordinate(self, source_coordinate: int) -> int:
+    def transform_coordinate(self, source_coordinate: int, direction: str = 'QT') -> int:
         """
         The main method to be invoked for coordinate transformation from query -> target coordinate systems.
         Uses precomputed (or lazily evaluated on the first invocation) prefix sums arrays for query/target consuming operations and binary search for efficient lookup.
@@ -195,6 +195,10 @@ class CMapper(object):
 
         Args:
             source_coordinate (int): source coordinate in query coordinate system to be translated to the target coordinate system
+                when source is the aligned query, not a target, and alignment orientation is reversed, the coordinate is assumed to be given w.r.t. to the original read, not the alignment
+                when the source is the alignment atrget, not a query, the coordinate is considered w.r.t. target coordinate system, ragardless if the alignment is revrssed or not
+            direction (str): a direction for the coordinate transformation with 'QT' encoding a query->target and 'TQ' encoding a target->query
+                when 'TQ` is specified, all comment/doc notation for query and target shall be reversed
 
         Returns:
             target coordinate (int): a position that the argument source coordinate maps to in the target sequence
@@ -215,19 +219,30 @@ class CMapper(object):
             >>> CMapper(Alignment("tr2", "chr2", 10, "20M")).transform_coordinate(10)
             20
         """
-        if source_coordinate < 0 or source_coordinate > max(0, self.query_prefix_sums[-1] - 1):
+        query_prefix_sums = self.query_prefix_sums
+        target_prefix_sums = self.target_prefix_sums
+
+        if direction != 'QT':
+            query_prefix_sums, target_prefix_sums = target_prefix_sums, query_prefix_sums
+            if self.alignment.direction:
+                source_coordinate -= self.alignment.start
+            else:
+                source_coordinate = self.alignment.start + self.query_prefix_sums[-1] - 1 - source_coordinate
+
+        if source_coordinate < 0 or source_coordinate > max(0, query_prefix_sums[-1] - 1):
             # last value in prefix sums array is the length of the query, but we need to account for the 0-based index
             raise ValueError(f"Can't transform coordinate {source_coordinate}, outside of query coordinate system")
         # identifies the last operation that would have consumed x <= source_coordinate bases in th query
-        operation_index: int = bisect.bisect_right(self.query_prefix_sums, source_coordinate)
+        operation_index: int = bisect.bisect_right(query_prefix_sums, source_coordinate)
 
         # special edge case where the alignment cigar string has no query consuming operations, in which case we default to the beginning of the alignment
         # while highly improbable -- still allowed by the CIGAR specification in the SAM format
-        if source_coordinate == 0 and self.query_prefix_sums[-1] == 0:
-            return self.alignment.start + int(not self.alignment.direction) * self.target_prefix_sums[-1]
+
+        if source_coordinate == 0 and query_prefix_sums[-1] == 0:
+            return self.alignment.start + int(not self.alignment.direction) * target_prefix_sums[-1]
 
         # sanity check, does not waste resources at all, but if really needed, can be avoided with with -O flag in execution
-        assert 0 <= operation_index <= len(self.query_prefix_sums) - 1
+        assert 0 <= operation_index <= len(query_prefix_sums) - 1
 
         # we get the operation index for the last stretch where there was a match between query an alignment,
         #   this is needed for ensuring that coordinates in non-target-consuming operations (i.e., insertions) map to the left-closest matching position
@@ -235,7 +250,7 @@ class CMapper(object):
 
         # computing how much query has been consumed by the latest operation not covering the queried coordinate,
         #   this is required for figure out how much of a non-consumed query we are left with
-        query_consumed: int = 0 if operation_index == 0 else self.query_prefix_sums[operation_index - 1]
+        query_consumed: int = 0 if operation_index == 0 else query_prefix_sums[operation_index - 1]
 
         # computing the amount of target-matching query we are left with
         #   of the last_matching index and operation indexes don't match, we are in the non-target-consuming are need to set remaining query length to -1,
@@ -247,13 +262,16 @@ class CMapper(object):
         last_matching_index -= int(last_matching_index == operation_index)
 
         # target is only consumed to the last matching operation (not counting the one in which the query coordinate lies)
-        target_consumed: int = 0 if last_matching_index < 0 else self.target_prefix_sums[last_matching_index]
+        target_consumed: int = 0 if last_matching_index < 0 else target_prefix_sums[last_matching_index]
 
         # we need to ensure that we don't end up with negative offset, which can come from weird valid CIGAR strings and the setup above (e.g., "I5")
-        if self.alignment.direction:
-            result: int = self.alignment.start + max(target_consumed + query_remaining, 0)
+        if direction == 'QT':
+            if self.alignment.direction:
+                result: int = self.alignment.start + max(target_consumed + query_remaining, 0)
+            else:
+                result: int = self.alignment.start + target_prefix_sums[-1] - 1 - max(target_consumed + query_remaining, 0)
         else:
-            result: int = self.alignment.start + self.target_prefix_sums[-1] - 1 - max(target_consumed + query_remaining, 0)
+            result = max(target_consumed + query_remaining, 0)
         return result
 
     def __hash__(self):
